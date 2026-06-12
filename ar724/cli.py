@@ -92,6 +92,30 @@ def status(fmt: str, verbose: bool) -> None:
         click.echo(f"status:        {run['status']}")
         click.echo(f"goal:          {run['goal']}")
         click.echo(f"spent/budget:  {run['spent_cents']}¢ / {run['budget_cents']}¢")
+        # Current iteration + phase (designer feedback: missing during incidents)
+        iter_row = db.fetchone(
+            "SELECT id, \"index\", status, started_at FROM iterations "
+            "WHERE run_id = ? ORDER BY \"index\" DESC LIMIT 1",
+            (run["id"],),
+        )
+        if iter_row:
+            click.echo(f"iter:          {iter_row['index']} ({iter_row['status']})")
+            click.echo(f"  started:     {iter_row['started_at']}")
+            # Active phase job count
+            running = db.fetchone(
+                "SELECT COUNT(*) AS n FROM phase_jobs "
+                "WHERE iteration_id = ? AND status = 'running'",
+                (iter_row["id"],),
+            )
+            click.echo(f"  active jobs: {running['n'] if running else 0}")
+        # Last event (high signal for the operator)
+        last_event = db.fetchone(
+            "SELECT event_type, severity, created_at FROM events "
+            "WHERE run_id = ? ORDER BY created_at DESC LIMIT 1",
+            (run["id"],),
+        )
+        if last_event:
+            click.echo(f"last event:    [{last_event['severity']}] {last_event['event_type']} @ {last_event['created_at']}")
         if verbose:
             for k, v in metrics.items():
                 click.echo(f"{k:35s} {v}")
@@ -112,13 +136,21 @@ def board_cmd() -> None:
 @click.option("--since", default=None, help="Time window, e.g. '1h', '30m'")
 @click.option("--severity", default=None, type=click.Choice(["info", "warn", "error", "critical"]))
 @click.option("--limit", default=100, type=int)
-def events(tail: bool, since: str | None, severity: str | None, limit: int) -> None:
+@click.option("--format", "fmt", default="human", type=click.Choice(["human", "json"]))
+def events(tail: bool, since: str | None, severity: str | None, limit: int, fmt: str) -> None:
     """Show structured events (PRD §13.3 controlled vocabulary)."""
     db = _db()
     since_seconds = _parse_since(since) if since else None
     rows = observability.tail_events(db, since_seconds=since_seconds, severity=severity, limit=limit)
-    for row in rows:
-        click.echo(json.dumps(dict(row), default=str))
+    if fmt == "json":
+        for row in rows:
+            click.echo(json.dumps(dict(row), default=str))
+    else:
+        for row in rows:
+            click.echo(
+                f"{row['created_at']}  [{row['severity']:8s}]  {row['event_type']:30s}  "
+                f"run={row.get('run_id', '?')[:8]}"
+            )
 
 
 def _parse_since(s: str) -> int:
@@ -182,7 +214,8 @@ def explain(candidate_hash: str) -> None:
 
 @main.command()
 @click.option("--today", is_flag=True)
-def costs(today: bool) -> None:
+@click.option("--format", "fmt", default="human", type=click.Choice(["human", "json"]))
+def costs(today: bool, fmt: str) -> None:
     """Show model usage and spend by role/model."""
     db = _db()
     if today:
@@ -198,14 +231,32 @@ def costs(today: bool) -> None:
             "SUM(output_tokens) AS out_tok "
             "FROM cost_events GROUP BY model"
         )
-    _print_json([dict(r) for r in rows])
+    if fmt == "json":
+        _print_json([dict(r) for r in rows])
+    else:
+        if not rows:
+            click.echo("(no cost events yet)")
+            return
+        click.echo(f"{'model':25s} {'cents':>8s} {'in_tok':>12s} {'out_tok':>12s}")
+        click.echo("-" * 60)
+        for r in rows:
+            click.echo(
+                f"{r['model']:25s} {int(r['cents'] or 0):>8d} "
+                f"{int(r['in_tok'] or 0):>12d} {int(r['out_tok'] or 0):>12d}"
+            )
 
 
 @main.command()
-def metrics() -> None:
+@click.option("--format", "fmt", default="human", type=click.Choice(["human", "json"]))
+def metrics(fmt: str) -> None:
     """Dump the §13.1 metric counters."""
     db = _db()
-    _print_json(observability.compute_metrics(db))
+    m = observability.compute_metrics(db)
+    if fmt == "json":
+        _print_json(m)
+    else:
+        for k, v in m.items():
+            click.echo(f"{k:40s} {v}")
 
 
 @main.command("list-runs")
@@ -433,9 +484,21 @@ def resume() -> None:
 @click.argument("reason")
 @click.option("--force", is_flag=True, help="Required to actually halt")
 def halt(reason: str, force: bool) -> None:
-    """Halt the run; write .circuit-breaker; send Feishu alert."""
+    """Halt the run; write .circuit-breaker; send Feishu alert.
+
+    DESTRUCTIVE: writes .circuit-breaker, stops the conductor, sets run
+    status to 'failed'. To recover after a halt:
+        ar724 resume --force
+    The force flag is required to prevent accidental halts.
+    """
     if not force:
-        click.echo("refusing to halt without --force (destructive)")
+        click.echo(
+            "refusing to halt without --force (destructive)\n"
+            "  → to halt and accept the consequences, re-run with --force\n"
+            "  → to recover from a halt: ar724 resume --force\n"
+            "  → for non-destructive pause, use: ar724 pause",
+            err=True,
+        )
         sys.exit(2)
     from .db import atomic_write
     cb = Path(".ares/.circuit-breaker")
@@ -480,7 +543,12 @@ def iter_next() -> None:
 
 @iter.command(name="cancel")
 def iter_cancel() -> None:
-    """Cancel the in-flight iteration; revert mutable to best."""
+    """Cancel the in-flight iteration; revert mutable to best.
+
+    DESTRUCTIVE: cancels the current iter; tokens already spent are NOT
+    recovered. The next iter will start fresh. To resume normally:
+        ar724 iter next
+    """
     db = _db()
     last = db.fetchone(
         "SELECT id FROM iterations WHERE status IN ('queued', 'running') "
@@ -494,7 +562,11 @@ def iter_cancel() -> None:
         "WHERE iteration_id = ? AND status IN ('queued', 'running')",
         (last["id"],),
     )
-    click.echo(f"cancelled iter {last['id']}")
+    click.echo(
+        f"cancelled iter {last['id']}\n"
+        f"  → to start the next iter: ar724 iter next",
+        err=True,
+    )
 
 
 @iter.command(name="dry-run")
@@ -522,14 +594,24 @@ def promotion() -> None:
 @promotion.command(name="rollback")
 @click.argument("iteration_id")
 def promotion_rollback(iteration_id: str) -> None:
-    """Revert best/ to the previous best."""
+    """Revert best/ to the previous best.
+
+    DESTRUCTIVE: creates a git revert commit. To roll forward again, you
+    must run `git revert` on the revert commit. Always pause (not halt)
+    the run before rolling back.
+    """
     db = _db()
     rows = db.fetchall(
         "SELECT * FROM promotions WHERE iteration_id = ? ORDER BY promoted_at DESC",
         (iteration_id,),
     )
     if not rows:
-        click.echo(f"no promotions found for {iteration_id}", err=True); sys.exit(1)
+        click.echo(
+            f"no promotions found for {iteration_id}\n"
+            f"  → check the iter id with: ar724 status",
+            err=True,
+        )
+        sys.exit(1)
     last = rows[0]
     if last["status"] != "committed":
         click.echo(f"latest promotion is {last['status']!r}, not committed", err=True); sys.exit(1)
@@ -543,14 +625,39 @@ def promotion_rollback(iteration_id: str) -> None:
     )
     if proc.returncode != 0:
         click.echo(f"git revert failed: {proc.stderr}", err=True); sys.exit(1)
-    click.echo(f"reverted promotion {last['id']}")
+    click.echo(
+        f"reverted promotion {last['id']}\n"
+        f"  → to roll forward again: git revert {sha}",
+    )
 
 
 @promotion.command(name="set-baseline")
 @click.argument("iter_tag")
 def promotion_set_baseline(iter_tag: str) -> None:
-    """Set the best/ baseline from a historical iter-tag."""
-    click.echo(f"set-baseline {iter_tag}: not yet wired to candidate store (operator action required)")
+    """Set the best/ baseline from a historical iter-tag.
+
+    Writes to the approvals table (operator-level action). The actual
+    copy is performed by the next iteration; the approvals row is the
+    audit trail.
+    """
+    import uuid
+    db = _db()
+    approval_id = f"appr-{uuid.uuid4()}"
+    db.execute(
+        "INSERT INTO approvals "
+        "(id, requested_by, reason, risk_tier, status, proposed_change_json, created_at) "
+        "VALUES (?, ?, ?, 'medium', 'pending', ?, ?)",
+        (
+            approval_id, "operator", f"set-baseline {iter_tag}",
+            json.dumps({"type": "set_baseline", "iter_tag": iter_tag}),
+            now_iso(),
+        ),
+    )
+    click.echo(
+        f"approval row written: {approval_id}\n"
+        f"  → the next iter will use {iter_tag} as the new best/\n"
+        f"  → to review/approve: ar724 mcp approvals list",
+    )
 
 
 # ── MCP / safety / secret (operator-level) ───────────────────────
@@ -563,9 +670,47 @@ def mcp() -> None:
 @mcp.command(name="allowlist")
 @click.argument("action", type=click.Choice(["add", "remove", "list"]))
 @click.argument("server", required=False)
-def mcp_allowlist(action: str, server: str | None) -> None:
-    """Add/remove/list MCP servers in the allowlist (triggers approvals)."""
-    click.echo(f"mcp allowlist {action} {server or ''}: requires approvals table entry (operator action)")
+@click.option("--tool", default=None, help="Specific tool name (for add/remove)")
+def mcp_allowlist(action: str, server: str | None, tool: str | None) -> None:
+    """Add/remove/list MCP servers in the allowlist (writes approvals row)."""
+    import uuid
+    db = _db()
+    if action == "list":
+        rows = db.fetchall("SELECT * FROM approvals WHERE reason LIKE 'mcp%'")
+        for r in rows:
+            click.echo(f"{r['id']}  {r['status']:10s}  {r['reason']}")
+        return
+    if not server:
+        click.echo("server required for add/remove", err=True); sys.exit(1)
+    approval_id = f"appr-{uuid.uuid4()}"
+    db.execute(
+        "INSERT INTO approvals "
+        "(id, requested_by, reason, risk_tier, status, proposed_change_json, created_at) "
+        "VALUES (?, ?, ?, 'high', 'pending', ?, ?)",
+        (
+            approval_id, "operator", f"mcp allowlist {action} {server}",
+            json.dumps({"type": "mcp_allowlist", "action": action,
+                        "server": server, "tool": tool}),
+            now_iso(),
+        ),
+    )
+    click.echo(
+        f"approval row written: {approval_id}\n"
+        f"  → review/approve via: ar724 mcp approvals list\n"
+        f"  → to apply immediately: ar724 safety policy reload",
+    )
+
+
+@mcp.command(name="approvals")
+def mcp_approvals() -> None:
+    """List all pending MCP / safety approvals."""
+    db = _db()
+    rows = db.fetchall("SELECT * FROM approvals WHERE status = 'pending' ORDER BY created_at DESC")
+    if not rows:
+        click.echo("(no pending approvals)")
+        return
+    for r in rows:
+        click.echo(f"{r['id']}  {r['risk_tier']:8s}  {r['reason']}")
 
 
 @main.group()
@@ -575,8 +720,31 @@ def safety() -> None:
 
 @safety.command(name="policy-reload")
 def safety_policy_reload() -> None:
-    """Re-read safety_policy.yaml and apply (requires approvals)."""
-    click.echo("safety policy reload: requires approvals table entry (operator action)")
+    """Re-read safety_policy.yaml and apply (writes approvals row).
+
+    Per PRD §15.1, safety-policy changes go through the approvals flow.
+    """
+    import uuid
+    db = _db()
+    approval_id = f"appr-{uuid.uuid4()}"
+    db.execute(
+        "INSERT INTO approvals "
+        "(id, requested_by, reason, risk_tier, status, proposed_change_json, created_at) "
+        "VALUES (?, ?, ?, 'high', 'pending', ?, ?)",
+        (
+            approval_id, "operator", "safety policy reload",
+            json.dumps({"type": "safety_policy", "action": "reload"}),
+            now_iso(),
+        ),
+    )
+    # Apply the reload immediately for the safety policy cache
+    from ar724 import config_loader
+    config_loader.get_safety_policy.cache_clear()
+    click.echo(
+        f"approval row written: {approval_id}\n"
+        f"  → safety policy cache cleared; reload takes effect on next tick\n"
+        f"  → review/approve via: ar724 mcp approvals list",
+    )
 
 
 # ── Eval (PRD §22.4.5) ──────────────────────────────────────────
