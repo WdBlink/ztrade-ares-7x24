@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ztrade-ares-7x24.dev/schemas/factor_combiner.output.schema.json",
+  "title": "factor_combiner output",
+  "description": "Schema for factor_combiner worker output (PRD §7.3).",
+  "type": "object",
+  "required": [
+    "factor_inclusion",
+    "weights",
+    "factor_correlation_matrix_summary",
+    "rationale"
+  ],
+  "properties": {
+    "factor_inclusion": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "required": ["name", "direction", "weight"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "direction": {"type": "string", "enum": ["long", "short", "neutral"]},
+          "weight": {"type": "number", "minimum": 0, "maximum": 1}
+        },
+        "additionalProperties": false
+      }
+    },
+    "weights": {
+      "type": "object",
+      "additionalProperties": {"type": "number"}
+    },
+    "factor_correlation_matrix_summary": {"type": "string", "minLength": 1},
+    "universe_proposal": {
+      "type": "object",
+      "properties": {
+        "selection_method": {"type": "string"},
+        "mcap_band": {"type": "array", "items": {"type": "number"}},
+        "max_symbols": {"type": "integer", "minimum": 1}
+      },
+      "additionalProperties": true
+    },
+    "rationale": {"type": "string", "minLength": 1}
+  },
+  "additionalProperties": true
+}

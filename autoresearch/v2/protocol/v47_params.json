@@ -1,0 +1,31 @@
+{
+  "schema_version": 47,
+  "data_dir_pin": "/data/ztrade/v47",
+  "engine_anchor": "v47-baseline",
+  "universe": {
+    "selection_method": "amount_top_n",
+    "max_symbols": 200,
+    "mcap_band": null
+  },
+  "factor_weights": {
+    "alpha_qlib_roc10": 0.20,
+    "alpha_qlib_roc30": 0.15,
+    "alpha_momentum_12_1": 0.10,
+    "alpha_reversal_30d": 0.05,
+    "alpha_value_earnyield": 0.10,
+    "alpha_quality_roe": 0.10,
+    "alpha_liquidity_adv20": 0.10,
+    "alpha_volatility_ivff": 0.05,
+    "alpha_size_lnmcap": 0.05,
+    "alpha_growth_salesaccel": 0.10
+  },
+  "rebalance": {
+    "frequency": "weekly",
+    "lookback_days": 252
+  },
+  "risk": {
+    "max_drawdown_pct": 0.20,
+    "max_position_pct": 0.05,
+    "max_industry_pct": 0.20
+  }
+}

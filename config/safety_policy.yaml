@@ -1,0 +1,43 @@
+# Safety policy (PRD §15.1). Versioned manifest loaded at controller startup.
+# Mutating this file requires the `approvals` table flow (§22.4.4).
+version: 1
+tool_rules:
+  - match: {tool: "Read", path: "autoresearch/**"}
+    action: allow
+  - match: {tool: "Read", path: "schemas/**"}
+    action: allow
+  - match: {tool: "Read", path: "ar724/runbooks/**"}
+    action: allow
+  - match: {tool: "Write", path: "autoresearch/candidates/**"}
+    action: allow
+  - match: {tool: "Write", path: "autoresearch/reports/**"}
+    action: allow
+  - match: {tool: "Write", path: "autoresearch/best/**"}
+    action: deny  # controller-only
+  - match: {tool: "Write", path: "autoresearch/mutable/**"}
+    action: deny_with_role_check  # only backtester
+  - match: {tool: "Write", path: "ar724/**"}
+    action: deny
+  - match: {tool: "Bash", command_class: "network_or_destructive"}
+    action: deny
+  - match: {tool: "Bash", command_class: "git_commit"}
+    action: deny  # controller-only
+
+mcp_allowlist:
+  - server: vibe-trading
+    tool: factor_analysis
+    version_fingerprint: "<pinned>"
+    argument_bounds: "<schema + dataset scope>"
+  - server: vibe-trading
+    tool: backtest
+    version_fingerprint: "<pinned>"
+    argument_bounds: "<schema + run_id>"
+
+# Path traversal and SSRF protection (PRD §15.1 path_validators).
+path_validators:
+  - name: resolve_inside_workspace
+    description: "Rejects any tool path argument that resolves outside the project root."
+  - name: reject_private_ips
+    description: "Bash tool calls with URLs in 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8 are denied."
+  - name: shell_classifier
+    description: "Bash commands are classified as read/write/network/destructive; only read and write commands within the workspace are allowed for non-backtester roles."

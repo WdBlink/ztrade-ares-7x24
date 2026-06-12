@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ztrade-ares-7x24.dev/schemas/backtest_reviewer.output.schema.json",
+  "title": "backtest_reviewer output",
+  "description": "Schema for backtest_reviewer worker output (PRD §7.3).",
+  "type": "object",
+  "required": ["candidate_hash", "verdict", "risk_flags", "rationale_path", "promotion_recommendation"],
+  "properties": {
+    "candidate_hash": {"type": "string", "minLength": 1},
+    "verdict": {"type": "string", "enum": ["KEEP", "VETO", "REVISE", "NEEDS_MORE_EVIDENCE"]},
+    "risk_flags": {"type": "array", "items": {"type": "string"}},
+    "rationale_path": {"type": "string", "minLength": 1},
+    "recommended_action": {"type": "string"},
+    "promotion_recommendation": {"type": "boolean"}
+  },
+  "additionalProperties": true
+}

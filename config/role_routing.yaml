@@ -1,0 +1,22 @@
+# Role routing (PRD §14.2).
+# `default_profile` is the model profile used for the role's worker calls.
+# `escalation_profile` is consulted when the trigger condition fires.
+routing:
+  factor_combiner:
+    default_profile: sonnet_4_5
+    escalation_profile: opus_4_7
+    escalation_trigger: |
+      Validator returned REVISE 2+ times in last 5 iterations
+      AND current iter attempts the same factor family
+  backtester:
+    default_profile: sonnet_4_5
+    # backtester does not need opus; backtest output is structural
+  factor_validator:
+    default_profile: opus_4_7
+    # validation is the highest-stakes call; use the strongest model
+  backtest_reviewer:
+    default_profile: opus_4_7
+    # reviewer decides VETO; high-stakes
+  evaluator_runner:
+    # deterministic, no LLM; profile is null
+    default_profile: null

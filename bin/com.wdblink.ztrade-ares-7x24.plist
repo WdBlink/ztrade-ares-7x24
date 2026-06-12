@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.wdblink.ztrade-ares-7x24</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>__PROJECT_ROOT__/bin/ares</string>
+    <string>conductor</string>
+    <string>--run-id</string>
+    <string>__RUN_ID__</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>__PROJECT_ROOT__</string>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+    <key>Crashed</key>
+    <true/>
+  </dict>
+
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+
+  <key>StandardOutPath</key>
+  <string>__PROJECT_ROOT__/.ares/conductor.stdout.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>__PROJECT_ROOT__/.ares/conductor.stderr.log</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
+    <key>AR724_STATE_DB</key>
+    <string>__PROJECT_ROOT__/.ares/state.db</string>
+    <key>AR724_LOOP_CONFIG</key>
+    <string>__PROJECT_ROOT__/.ares/loop_config.json</string>
+    <key>AR724_CONFIG_DIR</key>
+    <string>__PROJECT_ROOT__/config</string>
+    <key>AR724_ROLES_DIR</key>
+    <string>__PROJECT_ROOT__/autoresearch/v2/roles</string>
+  </dict>
+</dict>
+</plist>

@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ztrade-ares-7x24.dev/schemas/backtester.output.schema.json",
+  "title": "backtester output",
+  "description": "Schema for backtester worker output (PRD §7.3).",
+  "type": "object",
+  "required": ["candidate_path", "results_tsv_path", "metrics", "patch_manifest_path"],
+  "properties": {
+    "candidate_path": {"type": "string", "minLength": 1},
+    "results_tsv_path": {"type": "string", "minLength": 1},
+    "metrics": {
+      "type": "object",
+      "required": ["mean_annual_return_pct", "sharpe", "max_drawdown_pct"],
+      "properties": {
+        "mean_annual_return_pct": {"type": "number"},
+        "sharpe": {"type": "number"},
+        "max_drawdown_pct": {"type": "number"},
+        "trade_weighted_win_rate": {"type": "number"},
+        "icir": {"type": "number"}
+      },
+      "additionalProperties": true
+    },
+    "patch_manifest_path": {"type": "string", "minLength": 1},
+    "backtest_runtime_seconds": {"type": "number", "minimum": 0},
+    "backtest_warnings": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": true
+}
