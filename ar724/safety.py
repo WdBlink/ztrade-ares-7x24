@@ -96,9 +96,10 @@ def validate_path_read(path: str | Path) -> str:
 # ── Shell classifier (PRD §15.1 path_validators) ─────────────────
 
 _NETWORK_OR_DESTRUCTIVE = re.compile(
-    r"(\b(rm|rmdir|mv|cp|dd|mkfs|chmod|chown)\b\s+-[^\s]*[rf]\b"
+    r"(\b(rm|rmdir|mv|cp|dd|mkfs)\b\s+(-[rRfF][^\s]*|--recursive)\b"
+    r"|\bchmod\b\s+-[rRfF]"  # chmod -R / chmod -f / chmod -r are all destructive
+    r"|\bchown\b\s+(-R|--recursive)"
     r"|\bcurl\s|\bwget\s|\bnc\s|\bssh\s|\bscp\s|\brsync\s"
-    r"|\b(chmod|chown|kill)\b\s+(-R|--recursive)\b"
     r"|>\s*/dev/"
     r"|\|\s*sh"
     r"|\|\s*bash"

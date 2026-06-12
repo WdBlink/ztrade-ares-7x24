@@ -11,7 +11,7 @@
     <string>__PROJECT_ROOT__/bin/ares</string>
     <string>conductor</string>
     <string>--run-id</string>
-    <string>__RUN_ID__</string>
+    <string>auto</string>
   </array>
 
   <key>WorkingDirectory</key>

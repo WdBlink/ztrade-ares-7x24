@@ -237,6 +237,11 @@ def run_all_gates(
         )),
         ("10_promotion_lock", gate_promotion_lock(db, run_id)),
     ]
+    # Gate 3 and 4 are intentionally distinct in the PRD: gate 3 checks the
+    # exact hash match between candidate and evaluation input; gate 4 checks
+    # that the evaluation references the correct iteration and is not stale
+    # (a different evaluation row could match the hash but the wrong iter).
+    # PRD §8.1 keeps both as separate gates for audit clarity.
 
     for name, failure in gates:
         if failure is not None:

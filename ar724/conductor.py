@@ -93,6 +93,48 @@ def heartbeat_controller_lock(db: Database, run_id: str) -> None:
 
 # ── Stale reaper (PRD §5.3) ──────────────────────────────────────
 
+
+# Module-level oscillation state per run (PRD §9.1).
+# In a multi-process deployment, this would be persisted to SQLite; for V1.0
+# the single conductor process holds the in-memory detector.
+_RUN_OSCILLATION: dict[str, OscillationDetector] = {}
+
+
+def _check_oscillation(db: Database, run_id: str, candidate_hash: str, iter_id: str) -> bool:
+    """Run the oscillation detector for `candidate_hash`. Returns True if fired.
+
+    Reads the candidate's parameter dict from the candidates table, observes
+    it on the per-run detector, and (if fired) emits an `oscillation_detected`
+    event. If the loop_config has `oscillation_policy = 'halt'`, the gate
+    fails (PRD §9.1).
+    """
+    from .config_loader import get_loop_config
+    cand = db.fetchone("SELECT * FROM candidates WHERE hash = ?", (candidate_hash,))
+    if not cand:
+        return False
+    # Get the latest mutable file content as the parameter dict proxy.
+    mutable_path = Path(cand["mutable_path"] or "")
+    if not mutable_path.exists():
+        return False
+    try:
+        params = json.loads(mutable_path.read_text()).get("factor_weights", {})
+    except (json.JSONDecodeError, OSError):
+        return False
+    if not isinstance(params, dict) or not params:
+        return False
+    det = _RUN_OSCILLATION.setdefault(run_id, OscillationDetector())
+    triggered = det.observe(params)
+    if triggered:
+        policy = get_loop_config().get("oscillation_policy", "warn")
+        emit_event(
+            db, event_type="oscillation_detected", severity="warn",
+            run_id=run_id, iteration_id=iter_id, phase_job_id=None,
+            payload={"triggers": triggered, "policy": policy},
+        )
+        return policy == "halt"
+    return False
+
+
 def reap_stale_phase_jobs(
     db: Database,
     *,
@@ -389,7 +431,12 @@ def _try_promote_latest_iter(
             "AND run_id = ? ORDER BY promoted_at DESC LIMIT 1",
             (run_id,),
         )
-        best_score = 1.0 if best_row is None else candidate_score  # first promote allowed
+        if best_row is None:
+            # First promotion: regression guard disabled (any positive score
+            # is accepted). Subsequent promotions must beat 0.9 * best.
+            best_score = 0.0
+        else:
+            best_score = float(eval_row["score"] or 0.0)
         report = run_all_gates(
             db,
             run_id=run_id,
@@ -404,9 +451,9 @@ def _try_promote_latest_iter(
             reviewer_phase_job_id=reviewer["id"],
             builder_phase_job_id=next((j["id"] for j in jobs if j["role"] == "backtester"), None),
             evaluator_phase_job_id=next((j["id"] for j in jobs if j["role"] == "evaluator_runner"), None),
-            consecutive_discards=int(iter_row.get("index", 0)),  # placeholder
-            consecutive_blockeds=0,
-            oscillation_fired=False,
+            consecutive_discards=int(run["consecutive_discards"] or 0),
+            consecutive_blockeds=int(run["consecutive_blockeds"] or 0),
+            oscillation_fired=_check_oscillation(db, run_id, candidate_hash, iter_row.get("id")),
             allowed_paths=["autoresearch/best/", "autoresearch/mutable/"],
         )
         if not report.passed:
