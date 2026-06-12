@@ -45,6 +45,9 @@ max_iterations: 50
 timeout_seconds: 1800
 max_retries: 1
 default_model_profile: sonnet_4_5
+output_schema_path: schemas/factor_combiner.output.schema.json
+write_scope:
+  - autoresearch/candidates/
 acceptance:
   - factor_combiner.min_3_factors
   - factor_combiner.correlation_matrix_present

@@ -111,6 +111,7 @@ _PRIVATE_NETS = [
     ipaddress.ip_network(n) for n in (
         "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
         "127.0.0.0/8", "169.254.0.0/16", "0.0.0.0/8",
+        "100.64.0.0/10",  # CGNAT (RFC 6598)
     )
 ]
 
@@ -152,7 +153,11 @@ def validate_bash_command(command: str, role: str = "") -> str:
         )
 
     # SSRF: extract URLs and verify they don't point to private nets.
-    url_pattern = re.compile(r"https?://[^\s\"']+")
+    # The URL boundary is whitespace, quotes, and shell metacharacters
+    # (`)`, `]`, `}`, `<`, `>`, `;`, `&`, `|`, `` ` ``).
+    url_pattern = re.compile(
+        r"https?://[^\s\"'<>;&|`\)\]\}]+"
+    )
     for url in url_pattern.findall(command):
         try:
             host = urlparse(url).hostname or ""

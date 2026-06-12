@@ -44,6 +44,9 @@ max_iterations: 30
 timeout_seconds: 1800
 max_retries: 1
 default_model_profile: opus_4_7
+output_schema_path: schemas/factor_validator.output.schema.json
+write_scope:
+  - autoresearch/candidates/
 acceptance:
   - factor_validator.risk_flags_present
   - factor_validator.candidate_hash_present

@@ -56,14 +56,27 @@ def _fail(gate: str, reason: str) -> GateFailure:
 # ── Gate implementations ──────────────────────────────────────────
 
 def gate_schema(role_yaml: Mapping, worker_output: Mapping) -> GateFailure | None:
-    """Gate 1: worker output validates against the role's JSON schema."""
+    """Gate 1: worker output validates against the role's JSON schema.
+
+    Fail-closed: a missing or invalid schema path is a hard fail (per the
+    audit fix; previously a missing schema was a silent pass). The role
+    YAML MUST declare `output_schema_path` pointing to a real JSON Schema.
+    """
     import jsonschema
     schema_path = role_yaml.get("output_schema_path", "")
-    if not schema_path or not Path(schema_path).exists():
-        # No schema file = warn, not fail (graceful degradation)
-        return None
+    if not schema_path:
+        return _fail(
+            "schema",
+            f"role_yaml missing 'output_schema_path' (security audit fix; "
+            f"fail-closed; was previously silent pass)",
+        )
+    schema_file = Path(schema_path)
+    if not schema_file.is_absolute():
+        schema_file = Path.cwd() / schema_file
+    if not schema_file.exists():
+        return _fail("schema", f"schema file not found: {schema_path}")
     try:
-        schema = json.loads(Path(schema_path).read_text())
+        schema = json.loads(schema_file.read_text())
         jsonschema.validate(worker_output, schema)
         return None
     except (jsonschema.ValidationError, json.JSONDecodeError) as e:

@@ -173,8 +173,14 @@ def test_run_all_gates_returns_report(db: Database):
     report = run_all_gates(
         db, run_id=run_id,
         candidate_hash=cand_hash, iteration_id=iter_id,
-        role_yaml={"id": "backtest_reviewer"},
-        worker_output={}, write_paths=[],
+        role_yaml={"id": "backtest_reviewer", "output_schema_path": "schemas/backtest_reviewer.output.schema.json"},
+        worker_output={
+            "candidate_hash": cand_hash,
+            "verdict": "KEEP",
+            "risk_flags": [],
+            "rationale_path": "/tmp/rationale.md",
+            "promotion_recommendation": True,
+        }, write_paths=[],
         eval_decision="KEEP", candidate_score=1.0, best_score=1.0,
         reviewer_phase_job_id="reviewer-1",
         builder_phase_job_id="builder-1",

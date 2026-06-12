@@ -42,6 +42,10 @@ max_iterations: 30
 timeout_seconds: 5400
 max_retries: 1
 default_model_profile: sonnet_4_5
+output_schema_path: schemas/backtester.output.schema.json
+write_scope:
+  - autoresearch/mutable/
+  - autoresearch/candidates/
 acceptance:
   - backtester.results_tsv_path_present
   - backtester.metrics_above_floor

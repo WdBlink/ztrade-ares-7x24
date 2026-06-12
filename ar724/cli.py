@@ -330,8 +330,15 @@ def goal() -> None:
 def goal_set(text: str) -> None:
     """Update the research goal in loop_config.json."""
     cfg = config_loader.get_loop_config()
+    old = cfg.get("goal", "")
     cfg["goal"] = text
     config_loader.write_loop_config(cfg)
+    # Audit row (compliance fix)
+    db = _db()
+    observability.emit_event(
+        db, event_type="safety_violation_blocked", severity="info",
+        payload={"config": "loop_config.goal", "from": old[:80], "to": text[:80]},
+    )
     click.echo(f"goal updated: {text}")
 
 
@@ -348,13 +355,21 @@ def budget_set(daily: int | None, iter_runtime: int | None, run_budget: int | No
     """Update budget fields in loop_config.json."""
     cfg = config_loader.get_loop_config()
     rb = cfg.setdefault("resource_budget", {})
+    changes = {}
     if daily is not None:
-        rb["max_daily_token_usd"] = daily / 100.0
+        changes["max_daily_token_usd"] = daily / 100.0
     if iter_runtime is not None:
-        rb["max_iter_runtime_minutes"] = iter_runtime
+        changes["max_iter_runtime_minutes"] = iter_runtime
     if run_budget is not None:
-        rb.setdefault("max_run_budget_cents", run_budget)
+        changes["max_run_budget_cents"] = run_budget
+    rb.update(changes)
     config_loader.write_loop_config(cfg)
+    # Audit row (compliance fix)
+    db = _db()
+    observability.emit_event(
+        db, event_type="safety_violation_blocked", severity="info",
+        payload={"config": "loop_config.resource_budget", "changes": changes},
+    )
     click.echo(f"budget updated: {rb}")
 
 
@@ -372,6 +387,12 @@ def scope_set(selection_method: str | None) -> None:
     if selection_method:
         so["selection_method"] = selection_method
     config_loader.write_loop_config(cfg)
+    # Audit row (compliance fix)
+    db = _db()
+    observability.emit_event(
+        db, event_type="safety_violation_blocked", severity="info",
+        payload={"config": "loop_config.scope_overrides", "scope": so},
+    )
     click.echo(f"scope updated: {so}")
 
 
@@ -385,8 +406,16 @@ def oscillation() -> None:
 def oscillation_set_policy(policy: str) -> None:
     """Set oscillation_policy (warn | halt)."""
     cfg = config_loader.get_loop_config()
+    old = cfg.get("oscillation_policy", "warn")
     cfg["oscillation_policy"] = policy
     config_loader.write_loop_config(cfg)
+    # Audit row (compliance fix); severity=warn if flipping to halt
+    sev = "warn" if policy == "halt" else "info"
+    db = _db()
+    observability.emit_event(
+        db, event_type="safety_violation_blocked", severity=sev,
+        payload={"config": "loop_config.oscillation_policy", "from": old, "to": policy},
+    )
     click.echo(f"oscillation_policy = {policy}")
 
 

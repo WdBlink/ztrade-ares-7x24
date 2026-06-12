@@ -44,6 +44,9 @@ max_iterations: 30
 timeout_seconds: 1800
 max_retries: 1
 default_model_profile: opus_4_7
+output_schema_path: schemas/backtest_reviewer.output.schema.json
+write_scope:
+  - autoresearch/candidates/
 acceptance:
   - backtest_reviewer.verdict_known
   - backtest_reviewer.rationale_path_present
