@@ -65,13 +65,14 @@ def get_mcp_allowlist() -> list[dict[str, Any]]:
 
 def get_loop_config(loop_config_path: Path | None = None) -> dict[str, Any]:
     """Load .ares/loop_config.json. Path defaults to AR724_LOOP_CONFIG env or .ares/loop_config.json."""
+    import json
     if loop_config_path is None:
         env = os.environ.get("AR724_LOOP_CONFIG")
         loop_config_path = Path(env) if env else Path(".ares/loop_config.json")
     if not loop_config_path.exists():
         return {}
     with loop_config_path.open() as f:
-        return json_load(f)
+        return json.load(f)
 
 
 def json_load(path: Path) -> dict[str, Any]:

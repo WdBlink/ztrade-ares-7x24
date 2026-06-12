@@ -147,9 +147,10 @@ def events(tail: bool, since: str | None, severity: str | None, limit: int, fmt:
             click.echo(json.dumps(dict(row), default=str))
     else:
         for row in rows:
+            run_id = row["run_id"] if "run_id" in row.keys() else "?"
             click.echo(
                 f"{row['created_at']}  [{row['severity']:8s}]  {row['event_type']:30s}  "
-                f"run={row.get('run_id', '?')[:8]}"
+                f"run={str(run_id)[:8]}"
             )
 
 
