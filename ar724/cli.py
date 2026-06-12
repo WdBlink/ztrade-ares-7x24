@@ -437,13 +437,23 @@ def halt(reason: str, force: bool) -> None:
     if not force:
         click.echo("refusing to halt without --force (destructive)")
         sys.exit(2)
+    from .db import atomic_write
     cb = Path(".ares/.circuit-breaker")
     cb.parent.mkdir(exist_ok=True)
-    cb.write_text(f"halted at {now_iso()}: {reason}\n")
+    atomic_write(cb, f"halted at {now_iso()}: {reason}\n")
     db = _db()
     db.execute("UPDATE runs SET status = 'failed', stop_reason = ? WHERE status = 'running'", (reason,))
     observability.emit_event(db, event_type="run_halted", severity="critical",
                              payload={"reason": reason})
+    # Stop the conductor process so launchd's KeepAlive doesn't auto-restart
+    # a halted run as a zombie.
+    pid_file = Path(".ares/conductor.pid")
+    if pid_file.exists():
+        try:
+            pid = int(pid_file.read_text().strip())
+            os.kill(pid, signal.SIGTERM)
+        except (ValueError, ProcessLookupError, PermissionError):
+            pass
     click.echo(f"halted: {reason}")
 
 
@@ -693,7 +703,17 @@ def conductor(run_id: str, roles_dir: str, interval: float) -> None:
     running = {"value": True}
 
     def handle_sighup(signum, frame):
-        click.echo("SIGHUP received; reloading config", err=True)
+        """Re-read loop_config.json and clear lru_cache'd safety policy.
+
+        PRD §22.3: most loop_config fields are SIGHUP-reloadable. The safety
+        policy is gated through the approvals table (runbook 03) and is NOT
+        auto-reloaded here — that requires a separate `ar724 safety
+        policy-reload` invocation.
+        """
+        # Clear lru_cache on config_loader so YAML edits take effect.
+        from ar724 import config_loader
+        config_loader.get_safety_policy.cache_clear()
+        click.echo("SIGHUP received; loop_config.json re-read; safety policy cache cleared", err=True)
 
     def handle_sigterm(signum, frame):
         click.echo("SIGTERM received; shutting down", err=True)

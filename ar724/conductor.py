@@ -425,18 +425,20 @@ def _try_promote_latest_iter(
         roles = {r["id"]: r for r in validate_roles(roles_dir)}
         candidate_hash = iter_row["selected_candidate_hash"] or ""
         candidate_score = float(eval_row["score"] or 0.0)
-        # Best score = last committed promotion's candidate hash + score proxy
+        # Best score = score of the LAST COMMITTED promotion (the previous
+        # best's evaluation). On first promotion, the regression guard is
+        # disabled (best_score = 0.0 means any positive score passes).
         best_row = db.fetchone(
-            "SELECT * FROM promotions WHERE status = 'committed' "
-            "AND run_id = ? ORDER BY promoted_at DESC LIMIT 1",
+            "SELECT p.candidate_hash, e.score FROM promotions p "
+            "LEFT JOIN evaluations e ON e.candidate_hash = p.candidate_hash "
+            "WHERE p.status = 'committed' AND p.run_id = ? "
+            "ORDER BY p.promoted_at DESC LIMIT 1",
             (run_id,),
         )
-        if best_row is None:
-            # First promotion: regression guard disabled (any positive score
-            # is accepted). Subsequent promotions must beat 0.9 * best.
+        if best_row is None or best_row["score"] is None:
             best_score = 0.0
         else:
-            best_score = float(eval_row["score"] or 0.0)
+            best_score = float(best_row["score"])
         report = run_all_gates(
             db,
             run_id=run_id,

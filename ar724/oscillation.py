@@ -1,7 +1,13 @@
 """Oscillation detector — quant-domain A↔B↔A pattern detection.
 
-Vibe-Trading port (L3 quality pattern inspired by OPC v0.8):
-  Two complementary signals to reduce false positives in the quant domain:
+This module is an INDEPENDENT RE-IMPLEMENTATION of an L3 quality-control
+pattern; no source code is copied from any external system.
+
+The pattern is "inspired by" OPC v0.8 (iamtouchskyer/opc) — specifically the
+naive per-parameter oscillation detector described in OPC-One-Person-Company.md:115.
+Vibe-Trading does not have an equivalent pattern.
+
+Two complementary signals reduce false positives in the quant domain:
   1. Per-parameter oscillation (any single parameter oscillating 4+ times in 6 iters)
   2. Joint structural oscillation (after bucketing continuous params to 3 decimals)
 
