@@ -498,16 +498,26 @@ def down() -> None:
 def pause() -> None:
     """Pause the run (no new iterations); in-flight workers finish."""
     db = _db()
-    db.execute("UPDATE runs SET status = 'paused' WHERE status = 'running'")
-    click.echo("paused")
+    n = db.execute("UPDATE runs SET status = 'paused' WHERE status = 'running'")
+    if n.rowcount:
+        observability.emit_event(
+            db, event_type="run_paused", severity="info",
+            payload={"rows_affected": n.rowcount},
+        )
+    click.echo(f"paused ({n.rowcount} run(s))")
 
 
 @main.command()
 def resume() -> None:
     """Resume a paused run."""
     db = _db()
-    db.execute("UPDATE runs SET status = 'running' WHERE status = 'paused'")
-    click.echo("resumed")
+    n = db.execute("UPDATE runs SET status = 'running' WHERE status = 'paused'")
+    if n.rowcount:
+        observability.emit_event(
+            db, event_type="run_resumed", severity="info",
+            payload={"rows_affected": n.rowcount},
+        )
+    click.echo(f"resumed ({n.rowcount} run(s))")
 
 
 @main.command()
