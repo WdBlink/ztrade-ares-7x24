@@ -1,0 +1,28 @@
+# GitHub repository metadata for ztrade-ares-7x24
+# Applied via: gh repo edit --description "..." --add-topic <topic>
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-codeline
+
+description: "Agent Skill for the ztrade-ares 7x24 autonomous research controller — natural-language verb dispatch, incident-to-runbook routing, and confirmation gates on destructive actions."
+
+# 3-tier topic system per readme-craft's github-metadata reference.
+# Tier 1: domain (1-2 topics) — what is this project about?
+# Tier 2: technology (2-3 topics) — what technologies does it use?
+# Tier 3: audience/use (3-5 topics) — who uses it and how?
+topics:
+  # Tier 1: domain
+  - claude-code
+  - agent-skills
+  - autonomous-research
+  - quantitative-trading
+  - runbook
+  # Tier 2: technology
+  - claude
+  - skill
+  - llm
+  # Tier 3: audience / use
+  - trading
+  - strategy-research
+  - 7x24
+  - incident-response
+  - operator
+  - researcher
